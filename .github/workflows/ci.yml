@@ -1,6 +1,4 @@
 name: CI
-
-#         echo "R2PM_GITSKIP=1"
 on:
   push:
   
@@ -29,15 +27,17 @@ jobs:
       id: cache
       uses: actions/cache@v4
       with:
-        path: /opt/radare2
+        path: ./radare2/build
         key: ${{ runner.os }}-${{ hashFiles('**', '!**/.github/**', '!**/.git/**') }}
-    - name: Install radare2
+    - name: Build radare2
       if: steps.cache.outputs.cache-hit != 'true'
       run: |
-        echo "/opt/radare2/bin" >> $GITHUB_PATH
-        echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/opt/radare2/lib/*-linux-gnu/" >> $GITHUB_ENV
-        meson --prefix=/opt/radare2 --buildtype=release build && ninja -C build && sudo ninja -C build install
-        find /opt/radare2 -name r2
+        echo "/usr/local/bin" >> $GITHUB_PATH
+        meson --prefix=/usr --buildtype=release build && ninja -C build 
+      working-directory: ./radare2
+    - name: Install radare2
+      run: |
+        sudo ninja -C build install
       working-directory: ./radare2
     - uses: actions/checkout@v3
       with:
@@ -45,14 +45,13 @@ jobs:
         path: ${{ env.R2PM_GITDIR }}
     - name: Init r2pm
       run: r2pm -U
-      env:
-        LD_LIBRARY_PATH: /opt/radare2/lib/x86_64-linux-gnu/
     - name: Compile and install plugins
       run: |
-        set -e
-        for p in */; do
-            if [ -f "$p/Makefile" ]; then
-                echo $p
+        set -e 
+        for folder in "${R2PM_GITDIR}"/*/; do
+            if [ -n $folder/Makefile ]; then
+                p=${folder%/}
+                echo "$p"
                 r2pm -i "$p"
             fi
         done
