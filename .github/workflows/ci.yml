@@ -1,22 +1,23 @@
 name: CI
 
+#         echo "R2PM_GITSKIP=1"
+#         echo "R2PM_GITDIR=${GITHUB_WORKSPACE}/radare2-extras" >> $GITHUB_ENV 
 on:
   push:
   
   pull_request:
 
+env:
+  R2PM_GITSKIP: 1
+  R2PM_GITDIR: ${{ github.workspace }}/radare2-extras
 
 jobs:
-
   build-extras:
-    name: Build radare2 extras and r2pipe
+    name: Build radare2 extras
     runs-on: ubuntu-22.04
-    env:
-      BUILDS: 'asahi blackfin blessr2 keystone-lib keystone r2afen r2svd unicorn-lib vc4 x86iced'
-      TESTS: 'keystone vc4'
-      R2PIPE_TESTS: 'r2pipe-js r2pipe-py'
     steps:
     - uses: actions/checkout@v3
+      id: vcs_radare
       with:
         repository: radareorg/radare2
         ref: master
@@ -25,46 +26,44 @@ jobs:
       run: |
         sudo apt-get --assume-yes update
         sudo apt-get --assume-yes install libjansson-dev libboost-dev libcurl4-openssl-dev python3-wheel python3-setuptools && sudo pip3 install meson ninja
+    - name: Load cache
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: /opt/radare2
+        key: ${{ runner.os }}-${{ hashFiles('**', '!**/.github/**', '!**/.git/**') }}
     - name: Install radare2
+      if: steps.cache.outputs.cache-hit != 'true'
       run: |
-        export PATH=$PATH:/usr/local/bin
-        meson --prefix=/usr --buildtype=release build && ninja -C build && sudo ninja -C build install
-      working-directory: radare2
+        echo "/opt/radare2/bin" >> $GITHUB_PATH
+        echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/opt/radare2/lib/x86_64-linux-gnu/"
+        meson --prefix=/opt/radare2 --buildtype=release build && ninja -C build && sudo ninja -C build install
+        find /opt/radare2 -name r2
+      working-directory: ./radare2
     - uses: actions/checkout@v3
       with:
         ref: ${{ github.event.pull_request.head.sha }}
-        path: ./radare2-extras
+        path: ${{ env.R2PM_GITDIR }}
     - name: Init r2pm
       run: r2pm -U
+      env:
+        LD_LIBRARY_PATH: /opt/radare2/lib/x86_64-linux-gnu/
     - name: Compile and install plugins
       run: |
         set -e
-        export R2PM_GITDIR=`pwd`
-        export R2PM_GITSKIP=1
-        for p in $BUILDS ; do
-          echo $p
-          r2pm -i $p
+        for p in */; do
+            if [ -f "$p/Makefile" ]; then
+                echo $p
+                r2pm -i "$p"
+            fi
         done
         set +e
+      working-directory: ${{ env.R2PM_GITDIR }}
     - name: Test plugins
       working-directory: radare2/test
+      if: steps.cache.outputs.cache-hit != 'true'
       run: |
         set -e
-        export R2PM_GITDIR=`pwd`
-        export R2PM_GITSKIP=1
-        for p in $TESTS ; do
-          echo $p
-          make $p
-        done
-        set +e
-    - name: Compile and install r2pipe
-      run: |
-        set -e
-        export R2PM_GITDIR=`pwd`
-        export R2PM_GITSKIP=1
-        for p in $R2PIPE_TESTS ; do
-          echo $p
-          r2pm -i $p
-        done
+        make all
         set +e
 
