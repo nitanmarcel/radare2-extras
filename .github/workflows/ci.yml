@@ -1,7 +1,6 @@
 name: CI
 
 #         echo "R2PM_GITSKIP=1"
-#         echo "R2PM_GITDIR=${GITHUB_WORKSPACE}/radare2-extras" >> $GITHUB_ENV 
 on:
   push:
   
@@ -36,7 +35,7 @@ jobs:
       if: steps.cache.outputs.cache-hit != 'true'
       run: |
         echo "/opt/radare2/bin" >> $GITHUB_PATH
-        echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/opt/radare2/lib/x86_64-linux-gnu/"
+        echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/opt/radare2/lib/*-linux-gnu/" >> $GITHUB_ENV
         meson --prefix=/opt/radare2 --buildtype=release build && ninja -C build && sudo ninja -C build install
         find /opt/radare2 -name r2
       working-directory: ./radare2
